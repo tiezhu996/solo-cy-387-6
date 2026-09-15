@@ -9,3 +9,13 @@ body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #f6f8fb
 .full { width: 100%; }
 .map-panel, .repair { margin: 20px 0; padding: 18px; border: 1px solid #d7dee8; background: white; border-radius: 8px; }
 .repair { display: grid; grid-template-columns: 120px 1fr 120px auto; gap: 12px; align-items: center; }
+
+/* 共享设施预约与核销 */
+.facility-panel h2 { margin: 0 0 16px; }
+.facility-panel .block { margin-bottom: 18px; border-radius: 8px; }
+.card-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.identity, .checkin-bar, .maintain-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.identity .hint, .checkin-bar .hint { color: #8a93a5; font-size: 12px; }
+.top-nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 8px; }
+.top-nav .brand { font-weight: 700; font-size: 18px; color: #172033; }

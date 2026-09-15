@@ -7,3 +7,5 @@ __pycache__/
 *.log
 venv/
 media/
+*.sqlite3
+._*
