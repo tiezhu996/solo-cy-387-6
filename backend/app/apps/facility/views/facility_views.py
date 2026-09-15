@@ -44,10 +44,17 @@ class FacilityDetailView(APIView):
 
 class SlotListCreateView(APIView):
     def get(self, request):
-        """可预约开放时段：支持 facilityId / date 过滤，附带可预约状态。"""
+        """可预约开放时段：支持 facilityId / date 过滤，附带可预约状态。
+
+        默认只展示开放设施的时段；物业维护时传 includeDisabled=true
+        可查看已停用设施的时段。
+        """
         facility_id = request.query_params.get('facilityId')
         date = request.query_params.get('date')
-        slots = slot_service.list_slots(facility_id=facility_id, date=date)
+        include_disabled = request.query_params.get('includeDisabled') == 'true'
+        slots = slot_service.list_slots(
+            facility_id=facility_id, date=date, include_disabled=include_disabled
+        )
         return ok(slz.SlotSerializer(slots, many=True).data)
 
     @require_property

@@ -181,6 +181,7 @@ async function loadSlots() {
     managedSlots.value = await listSlots({
       facilityId: slotFilterFacility.value,
       date: slotFilterDate.value,
+      includeDisabled: true,
     });
   } catch (error) {
     ElMessage.error((error as Error).message);

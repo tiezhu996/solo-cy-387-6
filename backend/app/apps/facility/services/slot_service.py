@@ -46,9 +46,16 @@ def get_slot(slot_id) -> FacilitySlot:
     return slot
 
 
-def list_slots(*, facility_id=None, date=None, with_availability: bool = True):
-    """开放时段列表；with_availability 时附带预约状态（可预约/已约满）。"""
+def list_slots(*, facility_id=None, date=None, with_availability: bool = True, include_disabled: bool = False):
+    """开放时段列表。
+
+    默认只返回"开放中"设施的时段——停用设施的时段不出现在可预约列表；
+    include_disabled=True 时（物业维护视图）可查看停用设施的时段。
+    with_availability 时附带预约状态（可预约/已约满）。
+    """
     queryset = FacilitySlot.objects.select_related('facility').filter(is_open=True)
+    if not include_disabled:
+        queryset = queryset.filter(facility__status='开放')
     if facility_id is not None:
         queryset = queryset.filter(facility_id=facility_id)
     if date is not None:

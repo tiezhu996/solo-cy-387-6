@@ -55,8 +55,13 @@ export function deleteFacility(id: number) {
 
 /* -------------------------------- 时段 -------------------------------- */
 
-export function listSlots(params: { facilityId?: number; date?: string } = {}) {
-  return request<FacilitySlot[]>(`/slots/${query(params)}`);
+export function listSlots(
+  params: { facilityId?: number; date?: string; includeDisabled?: boolean } = {},
+) {
+  const { includeDisabled, ...rest } = params;
+  return request<FacilitySlot[]>(
+    `/slots/${query({ ...rest, includeDisabled: includeDisabled ? true : undefined })}`,
+  );
 }
 
 export function createSlot(body: { facilityId: number; date: string; startTime: string; endTime: string }) {

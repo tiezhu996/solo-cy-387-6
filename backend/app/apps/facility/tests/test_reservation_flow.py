@@ -66,6 +66,82 @@ class ReservationFlowTests(APITestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.data['code'], 'SLOT_CLOSED')
 
+    def test_disabled_facility_slots_hidden_and_restored(self):
+        """停用设施的时段不出现在可预约列表/筛选项，恢复开放后重新出现。"""
+        response = self.client.get('/api/slots/')
+        self.assertTrue(any(s['id'] == self.slot.id for s in response.data['data']))
+
+        # 设施列表（租客视角，不含停用设施）
+        response = self.client.get('/api/facilities/', {'includeClosed': 'false'})
+        self.assertTrue(any(f['id'] == self.facility.id for f in response.data['data']))
+
+        # 物业停用
+        response = self.client.patch(
+            f'/api/facilities/{self.facility.id}/', {'status': '停用'}, format='json', **PROPERTY_HEADERS
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # 可预约列表中不再出现该时段（即使显式按该设施过滤）
+        response = self.client.get('/api/slots/')
+        self.assertFalse(any(s['id'] == self.slot.id for s in response.data['data']))
+        response = self.client.get('/api/slots/', {'facilityId': self.facility.id})
+        self.assertFalse(any(s['id'] == self.slot.id for s in response.data['data']))
+        # 租客视角的设施列表/筛选项也不再包含
+        response = self.client.get('/api/facilities/', {'includeClosed': 'false'})
+        self.assertFalse(any(f['id'] == self.facility.id for f in response.data['data']))
+
+        # 物业维护视图带 includeDisabled 仍能看到
+        response = self.client.get('/api/slots/', {'includeDisabled': 'true', 'facilityId': self.facility.id})
+        self.assertTrue(any(s['id'] == self.slot.id for s in response.data['data']))
+
+        # 恢复开放后重新出现
+        response = self.client.patch(
+            f'/api/facilities/{self.facility.id}/', {'status': '开放'}, format='json', **PROPERTY_HEADERS
+        )
+        self.assertEqual(response.status_code, 200)
+        response = self.client.get('/api/slots/')
+        self.assertTrue(any(s['id'] == self.slot.id for s in response.data['data']))
+
+    def test_disabled_facility_existing_reservation_still_manageable(self):
+        """停用设施前已有预约：查询、取消仍可用。"""
+        reservation = self._book()
+        self.client.patch(
+            f'/api/facilities/{self.facility.id}/', {'status': '停用'}, format='json', **PROPERTY_HEADERS
+        )
+
+        # 租客仍能查到预约并取消
+        response = self.client.get('/api/reservations/', {'tenantPhone': '13800000001'})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['data'][0]['voucherCode'], reservation['voucherCode'])
+        response = self.client.post(
+            f"/api/reservations/{reservation['id']}/cancel/",
+            {'tenantPhone': '13800000001'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['data']['status'], '已取消')
+
+    def test_disabled_facility_existing_checkin_still_works(self):
+        """停用设施前已到场核销的预约，使用结束登记不受影响。"""
+        self.slot.start_dt = timezone.now() + timedelta(minutes=10)
+        self.slot.end_dt = self.slot.start_dt + timedelta(hours=1)
+        self.slot.save()
+        reservation = self._book()
+        self.client.patch(
+            f'/api/facilities/{self.facility.id}/', {'status': '停用'}, format='json', **PROPERTY_HEADERS
+        )
+
+        response = self.client.post(
+            '/api/check-in/', {'voucherCode': reservation['voucherCode']}, format='json', **PROPERTY_HEADERS
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data['data']['status'], '已核销')
+        response = self.client.post(
+            '/api/finish-use/', {'voucherCode': reservation['voucherCode']}, format='json', **PROPERTY_HEADERS
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data['data']['status'], '已完成')
+
     def test_cancel_then_slot_can_be_booked_again(self):
         reservation = self._book()
         response = self.client.post(
