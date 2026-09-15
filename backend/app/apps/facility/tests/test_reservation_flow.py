@@ -90,8 +90,10 @@ class ReservationFlowTests(APITestCase):
         response = self.client.get('/api/facilities/', {'includeClosed': 'false'})
         self.assertFalse(any(f['id'] == self.facility.id for f in response.data['data']))
 
-        # 物业维护视图带 includeDisabled 仍能看到
-        response = self.client.get('/api/slots/', {'includeDisabled': 'true', 'facilityId': self.facility.id})
+        # 物业维护视图带 includeDisabled 仍能看到（需物业角色）
+        response = self.client.get(
+            '/api/slots/', {'includeDisabled': 'true', 'facilityId': self.facility.id}, **PROPERTY_HEADERS
+        )
         self.assertTrue(any(s['id'] == self.slot.id for s in response.data['data']))
 
         # 恢复开放后重新出现

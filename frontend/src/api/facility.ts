@@ -34,8 +34,11 @@ function query(params: Record<string, string | number | boolean | undefined | nu
 
 /* -------------------------------- 设施 -------------------------------- */
 
-export function listFacilities(includeClosed = true) {
-  return request<Facility[]>(`/facilities/${query({ includeClosed })}`);
+export function listFacilities(includeClosed = false) {
+  // 含停用设施属于维护视角，需要物业角色
+  return request<Facility[]>(`/facilities/${query({ includeClosed: includeClosed ? true : undefined })}`, {
+    role: includeClosed ? 'property' : 'tenant',
+  });
 }
 
 export function createFacility(body: { name: string; location?: string; description?: string }) {
@@ -59,8 +62,10 @@ export function listSlots(
   params: { facilityId?: number; date?: string; includeDisabled?: boolean } = {},
 ) {
   const { includeDisabled, ...rest } = params;
+  // includeDisabled 是维护参数，需要物业角色
   return request<FacilitySlot[]>(
     `/slots/${query({ ...rest, includeDisabled: includeDisabled ? true : undefined })}`,
+    { role: includeDisabled ? 'property' : 'tenant' },
   );
 }
 

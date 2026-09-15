@@ -1,15 +1,21 @@
 from rest_framework.views import APIView
 
 from app.apps.facility import serializers as slz
-from app.apps.facility.permissions import require_property
+from app.apps.facility.permissions import assert_property_role, require_property
 from app.apps.facility.services import facility_service, slot_service
 from app.utils.responses import ok
 
 
 class FacilityListCreateView(APIView):
     def get(self, request):
-        """设施列表（租客/物业均可查看）。"""
-        include_closed = request.query_params.get('includeClosed', 'true') == 'true'
+        """设施列表。
+
+        默认只返回开放设施（供租客查看与筛选）；includeClosed=true 可同时
+        查看停用设施，但该维护参数仅物业角色可用，租客携带将被拒绝（403）。
+        """
+        include_closed = request.query_params.get('includeClosed') == 'true'
+        if include_closed:
+            assert_property_role(request)
         facilities = facility_service.list_facilities(include_closed=include_closed)
         return ok(slz.FacilitySerializer(facilities, many=True).data)
 
@@ -52,6 +58,9 @@ class SlotListCreateView(APIView):
         facility_id = request.query_params.get('facilityId')
         date = request.query_params.get('date')
         include_disabled = request.query_params.get('includeDisabled') == 'true'
+        # includeDisabled 是维护参数，仅物业角色可用，租客携带将被拒绝（403）
+        if include_disabled:
+            assert_property_role(request)
         slots = slot_service.list_slots(
             facility_id=facility_id, date=date, include_disabled=include_disabled
         )
