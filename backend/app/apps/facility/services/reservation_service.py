@@ -78,36 +78,48 @@ def cancel_reservation(reservation_id, *, tenant_phone=None) -> Reservation:
     return reservation
 
 
-@transaction.atomic
 def check_in(voucher_code: str) -> Reservation:
-    """物业按凭证核销到场。"""
-    reservation = Reservation.objects.select_for_update().select_related('slot').filter(
-        voucher_code=voucher_code
-    ).first()
-    if reservation is None:
-        raise NotFoundError('VOUCHER_NOT_FOUND')
+    """物业按凭证核销到场。
 
-    if reservation.status in ('已核销', '已完成'):
-        raise ConflictError('VOUCHER_ALREADY_USED')
-    if reservation.status == '已取消':
-        raise ConflictError('RESERVATION_CANCELLED')
-    if reservation.status == '爽约':
+    注意：过期自动爽约的写入必须先提交，再在事务外抛错——若在同一个
+    atomic 内 raise，爽约状态会随事务一起回滚。
+    """
+    expired = False
+    with transaction.atomic():
+        reservation = (
+            Reservation.objects.select_for_update()
+            .select_related('slot')
+            .filter(voucher_code=voucher_code)
+            .first()
+        )
+        if reservation is None:
+            raise NotFoundError('VOUCHER_NOT_FOUND')
+
+        if reservation.status in ('已核销', '已完成'):
+            raise ConflictError('VOUCHER_ALREADY_USED')
+        if reservation.status == '已取消':
+            raise ConflictError('RESERVATION_CANCELLED')
+        if reservation.status == '爽约':
+            raise ConflictError('RESERVATION_NO_SHOW')
+
+        now = timezone.now()
+        if now > reservation.slot.end_dt:
+            # 已超过时段结束时间仍未到场：自动爽约（写入随本事务提交）
+            reservation.mark_no_show()
+            reservation.save()
+            logger.info('预约超时自动爽约 voucher=%s', reservation.voucher_code)
+            expired = True
+        else:
+            earliest = reservation.slot.start_dt - timedelta(minutes=CHECK_IN_GRACE_MINUTES)
+            if now < earliest:
+                raise ConflictError('RESERVATION_NOT_STARTED')
+            reservation.mark_checked_in()
+            reservation.save()
+            logger.info('凭证核销成功 voucher=%s', reservation.voucher_code)
+
+    # 事务提交后再返回业务结果
+    if expired:
         raise ConflictError('RESERVATION_NO_SHOW')
-
-    now = timezone.now()
-    if now > reservation.slot.end_dt:
-        # 已超过时段结束时间仍未到场：自动爽约
-        reservation.mark_no_show()
-        reservation.save()
-        logger.info('预约超时自动爽约 voucher=%s', reservation.voucher_code)
-        raise ConflictError('RESERVATION_NO_SHOW')
-    earliest = reservation.slot.start_dt - timedelta(minutes=CHECK_IN_GRACE_MINUTES)
-    if now < earliest:
-        raise ConflictError('RESERVATION_NOT_STARTED')
-
-    reservation.mark_checked_in()
-    reservation.save()
-    logger.info('凭证核销成功 voucher=%s', reservation.voucher_code)
     return reservation
 
 
